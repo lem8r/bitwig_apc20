@@ -43,7 +43,7 @@ Shift + launch scene 3 - scroll scenes 1 page up
 
 Shift + launch scene 4 - scroll scenes 1 page down
 
-Shift + launch scene 5 - toggle pop up notifications (default on)
+Shift + launch scene 5 - toggle pop up notifications (default off)
 
 
 
@@ -56,3 +56,5 @@ Shift + User3 - track faders are mapped to currently selected tack's primary dev
 Track can be selected with GUI or Shift + track
 
 Cue encoder is not mapped to anywhere by default
+
+Volume faders are limited to 0dB.
