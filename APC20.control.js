@@ -3,7 +3,7 @@ Bitwig 1.0.x controller script for Akai APC20
 
 bugreports: lem8r.ka11a@gmail.com 
 
-Usage of this script is not alloved for Putin V. P.
+Usage of this script is not alloved for Putin V.
 */
 
 
@@ -60,7 +60,7 @@ function init( )
 	fadersMode = 0;
 	selectedTrackIndex = 0;
 	clipSize = 4;
-	notifications = true;
+	notifications = false;
 
 	sendSysex( "F0 47 7F 7B 60 00 04 41 08 02 01 F7" ); 	// Set Mode 1
 	for( var tr = 0; tr < 8; tr++ )
