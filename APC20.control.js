@@ -9,7 +9,7 @@ Usage of this script is not alloved for Putin V.
 
 loadAPI( 1 );
 
-host.defineController( "Akai", "APC20", "0.1", "e91c25b0-b5de-11e3-a5e2-0800200c9a66" );
+host.defineController( "Akai", "APC20", "0.2", "e91c25b0-b5de-11e3-a5e2-0800200c9a66" );
 host.defineMidiPorts( 1, 1 );
 host.addDeviceNameBasedDiscoveryPair( ["Akai APC20"], ["Akai APC20"] );
 host.addDeviceNameBasedDiscoveryPair( ["Akai APC20 MIDI 1"], ["Akai APC20 MIDI 1"] );
@@ -29,7 +29,6 @@ if( host.platformIsLinux( ) )
 	}
 }
 
-
 var noteInput, applicationView, transportView, masterTrackView, tracksBankView, userControlBankView;
 
 // Clip mode LEDs state
@@ -47,7 +46,6 @@ var trackIsMuted = initArray( false, 8 );
 var trackIsSoloed = initArray( false, 8 );
 var trackIsArmed = initArray( false, 8 );
 var trackExists = initArray( true, 8 );
-
 
 function init( )
 {
@@ -79,7 +77,8 @@ function init( )
 	masterTrackView = host.createMasterTrack( 5 );
 	tracksBankView = host.createMainTrackBank( 8, 3, 5 );
 	userControlBankView = host.createUserControls( 17 );
-	
+
+	host.defineSysexIdentityReply( "F0 7E ?? 06 02 47 7B 00 19 ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? F7" );
 	host.getMidiInPort(0).setMidiCallback( onMidi );
 	host.getMidiInPort(0).setSysexCallback( onSysex );
 	
@@ -463,11 +462,15 @@ function onMidi( status, data1, data2 )
 		if( (status >= 0x90) && (status <= 0x97) && (data1 >= 0x35) && (data1 <= 0x39) ) //clip launch pressed
 		{
 			if( clipHasContent[(status & 0x0F) + (data1 - 0x35)*8] )					//tr + scn*8
+			{
 				tracksBankView.getTrack( status & 0x0F ).getClipLauncherSlots( ).select( data1 - 0x35 );	// select clip
+				tracksBankView.getTrack( status & 0x0F ).getClipLauncherSlots( ).showInEditor( data1 - 0x35 ); //show in editor
+			}
 			else
 			{																			// create clip and select it
 				tracksBankView.getTrack( status & 0x0F ).getClipLauncherSlots( ).createEmptyClip( data1 - 0x35, clipSize );
 				tracksBankView.getTrack( status & 0x0F ).getClipLauncherSlots( ).select( data1 - 0x35 );
+				tracksBankView.getTrack( status & 0x0F ).getClipLauncherSlots( ).showInEditor( data1 - 0x35 ); //show in editor
 			}
 
 			return;
@@ -606,7 +609,7 @@ function onMidi( status, data1, data2 )
 
 function onSysex( data )
 {
-	//printSysex( data );
+//	printSysex( data );
 	return;
 }
 
@@ -643,7 +646,7 @@ function getTrackObFunc( track, property )
 		{
 			case 1:		// Track vol changed
 			{
-				sendMidi( 0xB0 | track, 0x07, (value <= 127) ? value : 127 );
+			//	sendMidi( 0xB0 | track, 0x07, (value <= 127) ? value : 127 );
 				return;
 			}
 			case 2:		// Track mute changed
