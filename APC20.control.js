@@ -9,7 +9,7 @@ Usage of this script is not alloved for Putin V.
 
 loadAPI( 1 );
 
-host.defineController( "Akai", "APC20", "0.2", "e91c25b0-b5de-11e3-a5e2-0800200c9a66" );
+host.defineController( "Akai", "APC20", "0.3", "e91c25b0-b5de-11e3-a5e2-0800200c9a66" );
 host.defineMidiPorts( 1, 1 );
 host.addDeviceNameBasedDiscoveryPair( ["Akai APC20"], ["Akai APC20"] );
 host.addDeviceNameBasedDiscoveryPair( ["Akai APC20 MIDI 1"], ["Akai APC20 MIDI 1"] );
@@ -97,6 +97,15 @@ function init( )
     		track.getArm( ).addValueObserver( getTrackObFunc( t, 4 ) );
 		track.exists( ).addValueObserver( getTrackObFunc( t, 5 ) );
 		track.addIsSelectedObserver( getTrackObFunc( t, 6 ) );
+
+		userControlBankView.getControl( t ).setIndication( true );
+		userControlBankView.getControl( t + 8 ).setIndication( true );
+		for( var m = 0; m < 8; m++ ) track.getPrimaryDevice( ).getMacro( m ).getAmount( ).setIndication( true );
+		track.getVolume( ).setIndication( true );
+		track.getPan( ).setIndication( true );
+		track.getSend( 0 ).setIndication( true );
+		track.getSend( 1 ).setIndication( true );
+		track.getSend( 2 ).setIndication( true );
 	
 		var clipLauncher = track.getClipLauncher();
 		clipLauncher.addHasContentObserver (getClipObserverFunc( t, 1 ) );
@@ -113,6 +122,9 @@ function init( )
 
 
 	masterTrackView.getVolume( ).addValueObserver( 161, masterTrackOb );
+	masterTrackView.getVolume( ).setIndication( true );
+	masterTrackView.getPan( ).setIndication( true );
+	userControlBankView.getControl( 16 ).setIndication( true );
 }
 
 function exit( )
@@ -120,11 +132,24 @@ function exit( )
 	for( var t = 0; t < 8; t++ )
 	{
 		tracksBankView.getTrack( t ).getClipLauncher( ).setIndication( false );
+		userControlBankView.getControl( t ).setIndication( false );
+		userControlBankView.getControl( t + 8 ).setIndication( false );
+		for( var m = 0; m < 8; m++ ) tracksBankView.getTrack( t ).getPrimaryDevice( ).getMacro( m ).getAmount( ).setIndication( false );
+		tracksBankView.getTrack( t ).getVolume( ).setIndication( false );
+		tracksBankView.getTrack( t ).getPan( ).setIndication( false );
+		tracksBankView.getTrack( t ).getSend( 0 ).setIndication( false );
+		tracksBankView.getTrack( t ).getSend( 1 ).setIndication( false );
+		tracksBankView.getTrack( t ).getSend( 2 ).setIndication( false );
+
 		sendMidi( 0x80 | t, 0x30, 0x00 );
 		sendMidi( 0x80 | t, 0x31, 0x00 );
 		sendMidi( 0x80 | t, 0x32, 0x00 );
 		sendMidi( 0x80 | t, 0x33, 0x00 );
 	}
+	masterTrackView.getVolume( ).setIndication( false );
+	masterTrackView.getPan( ).setIndication( false );
+	userControlBankView.getControl( 16 ).setIndication( false );
+
 	sendMidi( 0x80, 0x50, 0x00 );
 	for( var scn = 0; scn < 5; scn++ )
 				for( var tr = 0; tr < 8; tr++ )
@@ -498,7 +523,6 @@ function onMidi( status, data1, data2 )
 				if( data1 === 0x07 ) // vol fader
 				{
 					tracksBankView.getTrack( status & 0x07 ).getVolume( ).set( data2, 161 ); // 161 instead of 128 to limit max vol to 0dB not +6dB
-				//	tracksBankView.getTrack( status & 0x07 ).getVolume( ).setIndication( true );
 					return;
 				}
 				if( data1 === 0x0E )	// master fader
