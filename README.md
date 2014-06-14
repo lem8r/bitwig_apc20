@@ -57,4 +57,4 @@ Track can be selected with GUI or Shift + track
 
 Cue encoder is not mapped to anywhere by default
 
-Volume faders are limited to 0dB.
+Volume faders are limited to 0dB max level to prevent clipping in live situations.
