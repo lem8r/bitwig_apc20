@@ -1,4 +1,4 @@
-bitwig_apc20 v0.3
+bitwig_apc20 v0.4
 =================
 
 Open-source Akai APC20 control surface script for Bitwig Studio
@@ -51,7 +51,7 @@ Shift + User1 - track faders are globally mappable
 
 Shift + User2 - track faders are globally mappable
 
-Shift + User3 - track faders are mapped to currently selected tack's primary device macros
+Shift + User3 - track faders are mapped to currently selected tack's primary device parameter page
 
 Track can be selected with GUI or Shift + track
 
