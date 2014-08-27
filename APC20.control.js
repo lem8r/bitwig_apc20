@@ -1,15 +1,15 @@
 /*
-Bitwig 1.0.x controller script for Akai APC20
+Bitwig 1.0.x controller script for Akai APC20 (MK1)
 
-bugreports: lem8r.ka11a@gmail.com 
+latest version: https://github.com/lem8r/bitwig_apc20
 
-Usage of this script is not alloved for Putin V.
+version 0.4
 */
 
 
 loadAPI( 1 );
 
-host.defineController( "Akai", "APC20", "0.3", "e91c25b0-b5de-11e3-a5e2-0800200c9a66" );
+host.defineController( "Akai", "APC20", "0.4", "e91c25b0-b5de-11e3-a5e2-0800200c9a66" );
 host.defineMidiPorts( 1, 1 );
 host.addDeviceNameBasedDiscoveryPair( ["Akai APC20"], ["Akai APC20"] );
 host.addDeviceNameBasedDiscoveryPair( ["Akai APC20 MIDI 1"], ["Akai APC20 MIDI 1"] );
@@ -100,7 +100,7 @@ function init( )
 
 		userControlBankView.getControl( t ).setIndication( true );
 		userControlBankView.getControl( t + 8 ).setIndication( true );
-		for( var m = 0; m < 8; m++ ) track.getPrimaryDevice( ).getMacro( m ).getAmount( ).setIndication( true );
+		for( var m = 0; m < 8; m++ ) track.getPrimaryDevice( ).getParameter( m ).setIndication( true );
 		track.getVolume( ).setIndication( true );
 		track.getPan( ).setIndication( true );
 		track.getSend( 0 ).setIndication( true );
@@ -536,7 +536,6 @@ function onMidi( status, data1, data2 )
 				if( data1 === 0x07 ) // vol fader
 				{
 					tracksBankView.getTrack( status & 0x07 ).getPan( ).set( data2, 128 );
-					//tracksBankView.getTrack( status & 0x07 ).getPan( ).setIndication( true );
 					return;
 				}
 				if( data1 === 0x0E )	// master fader
@@ -614,7 +613,7 @@ function onMidi( status, data1, data2 )
 			{
 				if( data1 === 0x07 ) // vol fader
 				{
-					tracksBankView.getTrack( selectedTrackIndex ).getPrimaryDevice( ).getMacro( (status & 0x07) ).getAmount( ).set( data2, 128 );
+					tracksBankView.getTrack( selectedTrackIndex ).getPrimaryDevice( ).getParameter( (status & 0x07) ).set( data2, 128 );
 					return;
 				}
 				if( data1 === 0x0E )	// master fader
