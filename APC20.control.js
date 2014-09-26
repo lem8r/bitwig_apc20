@@ -1,15 +1,15 @@
 /*
-Bitwig 1.0.x controller script for Akai APC20 (MK1)
+Bitwig 1.0.x controller script for Akai APC20 (MK1) 
 
 latest version: https://github.com/lem8r/bitwig_apc20
 
-version 0.4
+version 0.5
 */
 
 
 loadAPI( 1 );
 
-host.defineController( "Akai", "APC20", "0.4", "e91c25b0-b5de-11e3-a5e2-0800200c9a66" );
+host.defineController( "Akai", "APC20", "0.5", "e91c25b0-b5de-11e3-a5e2-0800200c9a66" );
 host.defineMidiPorts( 1, 1 );
 host.addDeviceNameBasedDiscoveryPair( ["Akai APC20"], ["Akai APC20"] );
 host.addDeviceNameBasedDiscoveryPair( ["Akai APC20 MIDI 1"], ["Akai APC20 MIDI 1"] );
@@ -259,24 +259,38 @@ function onMidi( status, data1, data2 )
 
 			sendSysex( "F0 47 7F 7B 60 00 04 43 08 02 01 F7" ); 	// Set NoteMode
 			noteMode = true;
-			sendMidi( 0x90, 0x50, 0x7F );						// turn LED on
+	//		sendMidi( 0x90, 0x50, 0x7F );						// turn LED on
 
-			isPlayingOb( isPlaying );							// restore transport LEDs state
+	//		isPlayingOb( isPlaying );							// restore transport LEDs state
+	//		isRecordingOb( isRecording );
+	//		launcherOverdubOb( overdubMode );					// this code in not working in Linux see fix below
+	//		canScrollTracksUpOb( canScrollLeft );
+	//		canScrollTracksDownOb( canScrollRight );
+	//		canScrollScenesUpOb( canScrollUp );
+	//		canScrollScenesDownOb( canScrollDown );
+
+			if( notifications ) host.showPopupNotification( "APC20: Note Mode" );
+			return;
+		}
+
+		if ( (status === 0x80) && (data1 === 0x50) && noteMode )	//Note mode released (Linux fix)
+		{															// we are in note mode but leds are not lit yet
+			sendMidi( 0x90, 0x50, 0x7F );							// turn NoteMode LED on
+
+			isPlayingOb( isPlaying );								// restore transport LEDs state
 			isRecordingOb( isRecording );
 			launcherOverdubOb( overdubMode );
 			canScrollTracksUpOb( canScrollLeft );
 			canScrollTracksDownOb( canScrollRight );
 			canScrollScenesUpOb( canScrollUp );
 			canScrollScenesDownOb( canScrollDown );
-
-			if( notifications ) host.showPopupNotification( "APC20: Note Mode" );
-			return;
 		}
+
 		if ( (status === 0x90) && (data1 === 0x50) && noteMode )	//Note mode pressed
 		{
 			sendSysex( "F0 47 7F 7B 60 00 04 41 08 02 01 F7" ); 	// Set Mode 1
 			noteMode = false;
-			sendMidi( 0x90, 0x50, 0x00 );						// turn LED off
+			sendMidi( 0x80, 0x50, 0x00 );						// turn LED off
 			
 			isPlayingOb( isPlaying );							// restore transport LEDs state
 			isRecordingOb( isRecording );
