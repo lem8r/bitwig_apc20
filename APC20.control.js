@@ -3,13 +3,13 @@ Bitwig 1.0.x controller script for Akai APC20 (MK1)
 
 latest version: https://github.com/lem8r/bitwig_apc20
 
-version 0.5
+version 0.6
 */
 
 
 loadAPI( 1 );
 
-host.defineController( "Akai", "APC20", "0.5", "e91c25b0-b5de-11e3-a5e2-0800200c9a66" );
+host.defineController( "Akai", "APC20", "0.6", "e91c25b0-b5de-11e3-a5e2-0800200c9a66" );
 host.defineMidiPorts( 1, 1 );
 host.addDeviceNameBasedDiscoveryPair( ["Akai APC20"], ["Akai APC20"] );
 host.addDeviceNameBasedDiscoveryPair( ["Akai APC20 MIDI 1"], ["Akai APC20 MIDI 1"] );
@@ -31,6 +31,8 @@ if( host.platformIsLinux( ) )
 
 var noteInput, applicationView, transportView, masterTrackView, tracksBankView, userControlBankView;
 
+var SLOWPOKE_DELAY = 30; // ms to wait on mode switch
+
 // Clip mode LEDs state
 var noteMode, overdubMode, isPlaying, isRecording, shiftPressed;
 var canScrollLeft, canScrollRight, canScrollUp, canScrollDown;
@@ -47,6 +49,13 @@ var trackIsSoloed = initArray( false, 8 );
 var trackIsArmed = initArray( false, 8 );
 var trackExists = initArray( true, 8 );
 
+function APC_usleep( milliseconds )			// lets waste some cpu time
+{
+	var start = new Date().getTime();
+	while (new Date() < (start + milliseconds));
+	return true;  
+}
+
 function init( )
 {
 	noteMode = false;
@@ -61,6 +70,8 @@ function init( )
 	notifications = false;
 
 	sendSysex( "F0 47 7F 7B 60 00 04 41 08 02 01 F7" ); 	// Set Mode 1
+	APC_usleep( SLOWPOKE_DELAY );
+
 	for( var tr = 0; tr < 8; tr++ )
 	{
 		sendMidi( 0x80 | tr, 0x30,  0x00 );
@@ -157,6 +168,7 @@ function exit( )
 
 
 	sendSysex( "F0 47 7F 7B 60 00 04 40 08 02 01 F7" );	 // Set Mode 0
+	APC_usleep( SLOWPOKE_DELAY );
 }
 
 function onMidi( status, data1, data2 )
@@ -259,15 +271,17 @@ function onMidi( status, data1, data2 )
 
 			sendSysex( "F0 47 7F 7B 60 00 04 43 08 02 01 F7" ); 	// Set NoteMode
 			noteMode = true;
-	//		sendMidi( 0x90, 0x50, 0x7F );						// turn LED on
+			APC_usleep( SLOWPOKE_DELAY );
 
-	//		isPlayingOb( isPlaying );							// restore transport LEDs state
-	//		isRecordingOb( isRecording );
-	//		launcherOverdubOb( overdubMode );					// this code in not working in Linux see fix below
-	//		canScrollTracksUpOb( canScrollLeft );
-	//		canScrollTracksDownOb( canScrollRight );
-	//		canScrollScenesUpOb( canScrollUp );
-	//		canScrollScenesDownOb( canScrollDown );
+			sendMidi( 0x90, 0x50, 0x7F );						// turn LED on
+
+			isPlayingOb( isPlaying );							// restore transport LEDs state
+			isRecordingOb( isRecording );
+			launcherOverdubOb( overdubMode );					// this code in not working in Linux see fix below
+			canScrollTracksUpOb( canScrollLeft );
+			canScrollTracksDownOb( canScrollRight );
+			canScrollScenesUpOb( canScrollUp );
+			canScrollScenesDownOb( canScrollDown );
 
 			if( notifications ) host.showPopupNotification( "APC20: Note Mode" );
 			return;
@@ -275,21 +289,22 @@ function onMidi( status, data1, data2 )
 
 		if ( (status === 0x80) && (data1 === 0x50) && noteMode )	//Note mode released (Linux fix)
 		{															// we are in note mode but leds are not lit yet
-			sendMidi( 0x90, 0x50, 0x7F );							// turn NoteMode LED on
+//			sendMidi( 0x90, 0x50, 0x7F );							// turn NoteMode LED on
 
-			isPlayingOb( isPlaying );								// restore transport LEDs state
-			isRecordingOb( isRecording );
-			launcherOverdubOb( overdubMode );
-			canScrollTracksUpOb( canScrollLeft );
-			canScrollTracksDownOb( canScrollRight );
-			canScrollScenesUpOb( canScrollUp );
-			canScrollScenesDownOb( canScrollDown );
+//			isPlayingOb( isPlaying );								// restore transport LEDs state
+//			isRecordingOb( isRecording );
+//			launcherOverdubOb( overdubMode );
+//			canScrollTracksUpOb( canScrollLeft );
+//			canScrollTracksDownOb( canScrollRight );
+//			canScrollScenesUpOb( canScrollUp );
+//			canScrollScenesDownOb( canScrollDown );
 		}
 
 		if ( (status === 0x90) && (data1 === 0x50) && noteMode )	//Note mode pressed
 		{
 			sendSysex( "F0 47 7F 7B 60 00 04 41 08 02 01 F7" ); 	// Set Mode 1
 			noteMode = false;
+			APC_usleep( SLOWPOKE_DELAY );
 			sendMidi( 0x80, 0x50, 0x00 );						// turn LED off
 			
 			isPlayingOb( isPlaying );							// restore transport LEDs state
