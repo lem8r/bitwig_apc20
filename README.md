@@ -1,4 +1,4 @@
-bitwig_apc20 v0.6
+bitwig_apc20 v0.7
 =================
 
 Open-source Akai APC20 control surface script for Bitwig Studio
