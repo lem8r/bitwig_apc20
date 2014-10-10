@@ -3,13 +3,13 @@ Bitwig 1.0.x controller script for Akai APC20 (MK1)
 
 latest version: https://github.com/lem8r/bitwig_apc20
 
-version 0.6
+version 0.7
 */
 
 
 loadAPI( 1 );
 
-host.defineController( "Akai", "APC20", "0.6", "e91c25b0-b5de-11e3-a5e2-0800200c9a66" );
+host.defineController( "Akai", "APC20", "0.7", "e91c25b0-b5de-11e3-a5e2-0800200c9a66" );
 host.defineMidiPorts( 1, 1 );
 host.addDeviceNameBasedDiscoveryPair( ["Akai APC20"], ["Akai APC20"] );
 host.addDeviceNameBasedDiscoveryPair( ["Akai APC20 MIDI 1"], ["Akai APC20 MIDI 1"] );
@@ -28,6 +28,9 @@ if( host.platformIsLinux( ) )
 	   host.addDeviceNameBasedDiscoveryPair(["Akai APC20 " + + i.toString() + " MIDI 1"], ["Akai APC20 " + + i.toString() + " MIDI 1"]);
 	}
 }
+
+host.defineSysexIdentityReply( "F0 7E ?? 06 02 47 7B 00 19 ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? F7" );
+
 
 var noteInput, applicationView, transportView, masterTrackView, tracksBankView, userControlBankView;
 
@@ -49,11 +52,50 @@ var trackIsSoloed = initArray( false, 8 );
 var trackIsArmed = initArray( false, 8 );
 var trackExists = initArray( true, 8 );
 
-function APC_usleep( milliseconds )			// lets waste some cpu time
+function APC_usleep( milliseconds )			// it's so cold in this house (c) Bloc Party
 {
 	var start = new Date().getTime();
 	while (new Date() < (start + milliseconds));
 	return true;  
+}
+
+function switchLEDStoNoteMode( )
+{
+	sendMidi( 0x90, 0x50, 0x7F );						// turn Note mode LED on
+	isPlayingOb( isPlaying );						// restore transport LEDs state
+	isRecordingOb( isRecording );
+	launcherOverdubOb( overdubMode );
+	canScrollTracksUpOb( canScrollLeft );
+	canScrollTracksDownOb( canScrollRight );
+	canScrollScenesUpOb( canScrollUp );
+	canScrollScenesDownOb( canScrollDown );
+}
+
+function switchLEDStoClipMode( )
+{
+	sendMidi( 0x80, 0x50, 0x00 );						// turn LED off
+			
+	isPlayingOb( isPlaying );							// restore transport LEDs state
+	isRecordingOb( isRecording );
+	launcherOverdubOb( overdubMode );
+	canScrollTracksUpOb( canScrollLeft );
+	canScrollTracksDownOb( canScrollRight );
+	canScrollScenesUpOb( canScrollUp );
+	canScrollScenesDownOb( canScrollDown );
+
+	for( var scn = 0; scn < 5; scn++ )					// restore clip LEDs state
+		for( var tr = 0; tr < 8; tr++ )
+		{
+			clObF1 = getClipObserverFunc( tr, 1 );
+			clObF2 = getClipObserverFunc( tr, 2 );
+			clObF3 = getClipObserverFunc( tr, 3 );
+			clObF4 = getClipObserverFunc( tr, 4 );
+
+			clObF1( scn, clipHasContent[tr + scn*8] );
+			clObF2( scn, clipIsPlaiyng[tr + scn*8] );
+			clObF3( scn, clipIsRecording[tr + scn*8] );
+			clObF4( scn, clipIsQueued[tr + scn*8] );
+		}
 }
 
 function init( )
@@ -70,9 +112,9 @@ function init( )
 	notifications = false;
 
 	sendSysex( "F0 47 7F 7B 60 00 04 41 08 02 01 F7" ); 	// Set Mode 1
-	APC_usleep( SLOWPOKE_DELAY );
-
-	for( var tr = 0; tr < 8; tr++ )
+	APC_usleep( SLOWPOKE_DELAY );				// Sorry, scheduleTask is not working here since we have to stay in init()
+	
+	for( var tr = 0; tr < 8; tr++ )				// Clear some LED just in case
 	{
 		sendMidi( 0x80 | tr, 0x30,  0x00 );
 		sendMidi( 0x80 | tr, 0x31,  0x00 );
@@ -80,7 +122,7 @@ function init( )
 		sendMidi( 0x80 | tr, 0x33,  0x00 );
 	}
 	sendMidi( 0x80, 0x50, 0x00 );
-
+	
 	noteInput = host.getMidiInPort(0).createNoteInput( "Akai APC20", "99????", "89????" );
 	
 	applicationView = host.createApplication( );
@@ -89,7 +131,6 @@ function init( )
 	tracksBankView = host.createMainTrackBank( 8, 3, 5 );
 	userControlBankView = host.createUserControls( 17 );
 
-	host.defineSysexIdentityReply( "F0 7E ?? 06 02 47 7B 00 19 ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? F7" );
 	host.getMidiInPort(0).setMidiCallback( onMidi );
 	host.getMidiInPort(0).setSysexCallback( onSysex );
 	
@@ -167,8 +208,8 @@ function exit( )
 					sendMidi( 0x80 | tr, 0x35 + scn, 0x00 );
 
 
-	sendSysex( "F0 47 7F 7B 60 00 04 40 08 02 01 F7" );	 // Set Mode 0
-	APC_usleep( SLOWPOKE_DELAY );
+	sendSysex( "F0 47 7F 7B 60 00 04 40 08 02 01 F7" );	// Set Mode 0
+	APC_usleep( SLOWPOKE_DELAY );				// Trust me, I'm engineer
 }
 
 function onMidi( status, data1, data2 )
@@ -263,71 +304,25 @@ function onMidi( status, data1, data2 )
 			return;
 		}
 
-		if ( (status === 0x90) && (data1 === 0x50) && !noteMode )	//Note mode pressed
-		{			
+		if ( (status === 0x90) && (data1 === 0x50) && !noteMode )			//Note mode pressed
+		{										// Switching to note mode now
 			for( var scn = 0; scn < 5; scn++ )
 				for( var tr = 0; tr < 8; tr++ )
 					sendMidi( 0x80 | tr, 0x35 + scn, 0x00 );		// clead clip LEDs for note mode
 
-			sendSysex( "F0 47 7F 7B 60 00 04 43 08 02 01 F7" ); 	// Set NoteMode
+			sendSysex( "F0 47 7F 7B 60 00 04 43 08 02 01 F7" ); 			// Set NoteMode
 			noteMode = true;
-			APC_usleep( SLOWPOKE_DELAY );
-
-			sendMidi( 0x90, 0x50, 0x7F );						// turn LED on
-
-			isPlayingOb( isPlaying );							// restore transport LEDs state
-			isRecordingOb( isRecording );
-			launcherOverdubOb( overdubMode );					// this code in not working in Linux see fix below
-			canScrollTracksUpOb( canScrollLeft );
-			canScrollTracksDownOb( canScrollRight );
-			canScrollScenesUpOb( canScrollUp );
-			canScrollScenesDownOb( canScrollDown );
+			host.scheduleTask( switchLEDStoNoteMode, null, SLOWPOKE_DELAY );	//Let's give APC20 some time to switch mode
 
 			if( notifications ) host.showPopupNotification( "APC20: Note Mode" );
 			return;
 		}
 
-		if ( (status === 0x80) && (data1 === 0x50) && noteMode )	//Note mode released (Linux fix)
-		{															// we are in note mode but leds are not lit yet
-//			sendMidi( 0x90, 0x50, 0x7F );							// turn NoteMode LED on
-
-//			isPlayingOb( isPlaying );								// restore transport LEDs state
-//			isRecordingOb( isRecording );
-//			launcherOverdubOb( overdubMode );
-//			canScrollTracksUpOb( canScrollLeft );
-//			canScrollTracksDownOb( canScrollRight );
-//			canScrollScenesUpOb( canScrollUp );
-//			canScrollScenesDownOb( canScrollDown );
-		}
-
-		if ( (status === 0x90) && (data1 === 0x50) && noteMode )	//Note mode pressed
-		{
-			sendSysex( "F0 47 7F 7B 60 00 04 41 08 02 01 F7" ); 	// Set Mode 1
+		if ( (status === 0x90) && (data1 === 0x50) && noteMode )			//Note mode pressed
+		{										// Returning to clip mode now
+			sendSysex( "F0 47 7F 7B 60 00 04 41 08 02 01 F7" ); 			// Set Mode 1
 			noteMode = false;
-			APC_usleep( SLOWPOKE_DELAY );
-			sendMidi( 0x80, 0x50, 0x00 );						// turn LED off
-			
-			isPlayingOb( isPlaying );							// restore transport LEDs state
-			isRecordingOb( isRecording );
-			launcherOverdubOb( overdubMode );
-			canScrollTracksUpOb( canScrollLeft );
-			canScrollTracksDownOb( canScrollRight );
-			canScrollScenesUpOb( canScrollUp );
-			canScrollScenesDownOb( canScrollDown );
-
-			for( var scn = 0; scn < 5; scn++ )					// restore clip LEDs state
-				for( var tr = 0; tr < 8; tr++ )
-				{
-					clObF1 = getClipObserverFunc( tr, 1 );
-					clObF2 = getClipObserverFunc( tr, 2 );
-					clObF3 = getClipObserverFunc( tr, 3 );
-					clObF4 = getClipObserverFunc( tr, 4 );
-
-					clObF1( scn, clipHasContent[tr + scn*8] );
-					clObF2( scn, clipIsPlaiyng[tr + scn*8] );
-					clObF3( scn, clipIsRecording[tr + scn*8] );
-					clObF4( scn, clipIsQueued[tr + scn*8] );
-				}
+			host.scheduleTask( switchLEDStoClipMode, null, SLOWPOKE_DELAY );	//Let's give APC20 some time to switch mode
 
 			if( notifications ) host.showPopupNotification( "APC20: Clip Mode" );
 			return;
@@ -676,14 +671,14 @@ function isRecordingOb( state )
 {
 	isRecording = state;
 	if( isRecording ) sendMidi( 0x92, 0x33, 0x7F );				// turn LED on
-	if( !isRecording ) sendMidi( 0x82, 0x33, 0x00 );				// turn LED off
+	if( !isRecording ) sendMidi( 0x82, 0x33, 0x00 );			// turn LED off
 }
 
 function launcherOverdubOb( state )
 {
 	overdubMode = state;
 	if( overdubMode ) sendMidi( 0x93, 0x33, 0x7F );				// turn LED on
-	if( !overdubMode ) sendMidi( 0x83, 0x33, 0x00 );				// turn LED off
+	if( !overdubMode ) sendMidi( 0x83, 0x33, 0x00 );			// turn LED off
 }
 var trackIsMuted = initArray( false, 8 );
 var trackIsSoloed = initArray( false, 8 );
