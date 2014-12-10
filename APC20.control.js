@@ -3,13 +3,13 @@ Bitwig 1.0.x controller script for Akai APC20 (MK1)
 
 latest version: https://github.com/lem8r/bitwig_apc20
 
-version 0.7
+version 0.8
 */
 
 
 loadAPI( 1 );
 
-host.defineController( "Akai", "APC20", "0.7", "e91c25b0-b5de-11e3-a5e2-0800200c9a66" );
+host.defineController( "Akai", "APC20", "0.8", "e91c25b0-b5de-11e3-a5e2-0800200c9a66" );
 host.defineMidiPorts( 1, 1 );
 host.addDeviceNameBasedDiscoveryPair( ["Akai APC20"], ["Akai APC20"] );
 host.addDeviceNameBasedDiscoveryPair( ["Akai APC20 MIDI 1"], ["Akai APC20 MIDI 1"] );
@@ -109,7 +109,7 @@ function init( )
 	fadersMode = 0;
 	selectedTrackIndex = 0;
 	clipSize = 4;
-	notifications = false;
+	notifications = true;
 
 	sendSysex( "F0 47 7F 7B 60 00 04 41 08 02 01 F7" ); 	// Set Mode 1
 	APC_usleep( SLOWPOKE_DELAY );				// Sorry, scheduleTask is not working here since we have to stay in init()
@@ -388,7 +388,7 @@ function onMidi( status, data1, data2 )
 		
 		if( (status >= 0x90) && (status <= 0x96) && (data1 === 0x34) ) //clip stop pressed
 		{
-			tracksBankView.getTrack( status & 0x0F ).getClipLauncherSlots( ).stop( );
+//			tracksBankView.getTrack( status & 0x0F ).getClipLauncherSlots( ).stop( );
 			sendMidi( status, data1, 0x7F );						// turn LED on
 			
 			switch( status & 0x0F )
@@ -848,3 +848,4 @@ function canScrollScenesDownOb( state )
 	if( canScrollDown ) sendMidi( 0x97, 0x33, 0x7F );				// turn LED on
 	if( !canScrollDown ) sendMidi( 0x87, 0x33, 0x00 );				// turn LED off
 }
+
