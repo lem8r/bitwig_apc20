@@ -43,7 +43,7 @@ Copy APC20.control.js to
 
 `Shift + launch scene 4` - scroll scenes 1 page down
 
-`Shift + launch scene 5 - toggle pop up notifications (default off)
+`Shift + launch scene 5` - toggle pop up notifications (default off)
 
 
 
