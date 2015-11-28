@@ -48,6 +48,7 @@ var trackIsMuted = initArray(false, 8);
 var trackIsSoloed = initArray(false, 8);
 var trackIsArmed = initArray(false, 8);
 var trackExists = initArray(true, 8);
+var trackIsGroup = initArray(false, 8);
 
 function APC_usleep(milliseconds) // it's so cold in this house (c) Bloc Party
 {
@@ -141,6 +142,7 @@ function init() {
         track.getArm().addValueObserver(getTrackObFunc(t, 4));
         track.exists().addValueObserver(getTrackObFunc(t, 5));
         track.addIsSelectedObserver(getTrackObFunc(t, 6));
+        track.addIsGroupObserver(getTrackObFunc(t, 7));
 
         userControlBankView.getControl(t).setIndication(true);
         userControlBankView.getControl(t + 8).setIndication(true);
@@ -503,9 +505,11 @@ function onMidi(status, data1, data2) {
                 tracksBankView.getChannel(status & 0x0F).getClipLauncherSlots().select(data1 - 0x35); // select clip
                 tracksBankView.getChannel(status & 0x0F).getClipLauncherSlots().showInEditor(data1 - 0x35); //show in editor
             } else { // create clip and select it
-                tracksBankView.getChannel(status & 0x0F).getClipLauncherSlots().createEmptyClip(data1 - 0x35, clipSize);
-                tracksBankView.getChannel(status & 0x0F).getClipLauncherSlots().select(data1 - 0x35);
-                tracksBankView.getChannel(status & 0x0F).getClipLauncherSlots().showInEditor(data1 - 0x35); //show in editor
+                if (trackIsGroup[(status & 0x0F)] == false) {
+                    tracksBankView.getChannel(status & 0x0F).getClipLauncherSlots().createEmptyClip(data1 - 0x35, clipSize);
+                    tracksBankView.getChannel(status & 0x0F).getClipLauncherSlots().select(data1 - 0x35);
+                    tracksBankView.getChannel(status & 0x0F).getClipLauncherSlots().showInEditor(data1 - 0x35); //show in editor
+                }
             }
 
             return;
@@ -705,11 +709,14 @@ function getTrackObFunc(track, property) {
                 {
                     if (value)
                         selectedTrackIndex = track;
-                        for (var m = 0; m < 8; m++)
-                        {
-                            tracksBankView.getChannel(selectedTrackIndex).createCursorDevice("Primary").getCommonParameter(m).setIndication(true);
-                        }
+                    for (var m = 0; m < 8; m++) {
+                        tracksBankView.getChannel(selectedTrackIndex).createCursorDevice("Primary").getCommonParameter(m).setIndication(true);
+                    }
                     return;
+                }
+            case 7: // Track is group
+                {
+                    trackIsGroup[track] = value;
                 }
         }
 
@@ -721,6 +728,7 @@ function getClipObserverFunc(track, state) {
         switch (state) {
             case 1: // has content
                 {
+                    // println("Track : " + track + ", Scene : " + scene + " has content: " + value);
                     clipHasContent[track + scene * 8] = value;
                     if (value && !clipIsRecording[track + scene * 8]) {
                         sendMidi(0x90 | track, 0x35 + scene, 0x05); //yellow
@@ -735,12 +743,18 @@ function getClipObserverFunc(track, state) {
                 }
             case 2: // is playing
                 {
+                    // println("Track : " + track + ", Scene : " + scene + "is playing: " + value);
                     clipIsPlaiyng[track + scene * 8] = value;
                     if (value) {
                         sendMidi(0x90 | track, 0x35 + scene, 0x01); //green
                         return;
                     }
-                    if (!value && clipHasContent[track + scene * 8]) // if stopped
+                    if (!value && clipHasContent[track + scene * 8] && clipIsQueued[track + scene * 8]) // if queued
+                    {
+                        sendMidi(0x90 | track, 0x35 + scene, 0x02); //blink green
+                        return;
+                    }
+                    if (!value && clipHasContent[track + scene * 8] && !clipIsQueued[track + scene * 8]) // if stopped
                     {
                         sendMidi(0x90 | track, 0x35 + scene, 0x05); //back to yellow
                         return;
@@ -750,6 +764,7 @@ function getClipObserverFunc(track, state) {
                 }
             case 3: // is recording
                 {
+                    // println("Track : " + track + ", Scene : " + scene + " is recording: " + value);
                     clipIsRecording[track + scene * 8] = value;
                     if (value) {
                         sendMidi(0x90 | track, 0x35 + scene, 0x03); //red
@@ -770,6 +785,7 @@ function getClipObserverFunc(track, state) {
                 }
             case 4: // is playback queued
                 {
+                    // println("Track : " + track + ", Scene : " + scene + " playback queued: " + value);
                     clipIsQueued[track + scene * 8] = value;
                     if (value) {
                         sendMidi(0x90 | track, 0x35 + scene, 0x02); //blink green
@@ -789,7 +805,7 @@ function getClipObserverFunc(track, state) {
                 }
             case 5: // is record queued
                 {
-
+                    // println("Track : " + track + ", Scene : " + scene + " record queued: " + value);
                     clipIsQueued[track + scene * 8] = value;
                     if (value) {
                         sendMidi(0x90 | track, 0x35 + scene, 0x04); //blink red
@@ -809,6 +825,7 @@ function getClipObserverFunc(track, state) {
                 }
             case 6: // is stop queued
                 {
+                    // println("Track : " + track + ", Scene : " + scene + " stop queued: " + value);
                     clipIsQueued[track + scene * 8] = value;
                     if (value) {
                         sendMidi(0x90 | track, 0x35 + scene, 0x06); //blink yellow
