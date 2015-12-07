@@ -3,13 +3,13 @@ Bitwig 1.3.x controller script for Akai APC20 (MK1)
 
 latest version: https://github.com/lem8r/bitwig_apc20
 
-version 0.9
+version 1.0
 */
 
 
 loadAPI(1);
 
-host.defineController("Akai", "APC20", "0.9", "e91c25b0-b5de-11e3-a5e2-0800200c9a66");
+host.defineController("Akai", "APC20", "1.0", "e91c25b0-b5de-11e3-a5e2-0800200c9a66");
 host.defineMidiPorts(1, 1);
 host.addDeviceNameBasedDiscoveryPair(["Akai APC20"], ["Akai APC20"]);
 host.addDeviceNameBasedDiscoveryPair(["Akai APC20 MIDI 1"], ["Akai APC20 MIDI 1"]);
@@ -49,12 +49,38 @@ var trackIsSoloed = initArray(false, 8);
 var trackIsArmed = initArray(false, 8);
 var trackExists = initArray(true, 8);
 var trackIsGroup = initArray(false, 8);
+var trackIsMuted = initArray(false, 8);
+var trackIsSoloed = initArray(false, 8);
+var trackIsArmed = initArray(false, 8);
+var trackExists = initArray(false, 8);
+
+var applicationView;
+var transportView;
+var masterTrackView;
+var tracksBankView;
+var userControlBankView;
+var cursorTrack;
+var cursorDevice;
+var cursUp = 0;
+var cursDown = 0;
+var clipLauncher
 
 function APC_usleep(milliseconds) // it's so cold in this house (c) Bloc Party
 {
     var start = new Date().getTime();
     while (new Date() < (start + milliseconds));
     return true;
+}
+
+function clearTransportAndTrackLeds() {
+    for (var tr = 0; tr < 8; tr++) // Clear some LED just in case
+    {
+        sendMidi(0x80 | tr, 0x30, 0x00);
+        sendMidi(0x80 | tr, 0x31, 0x00);
+        sendMidi(0x80 | tr, 0x32, 0x00);
+        sendMidi(0x80 | tr, 0x33, 0x00);
+    }
+    sendMidi(0x80, 0x50, 0x00);
 }
 
 function switchLEDStoNoteMode() {
@@ -107,23 +133,17 @@ function init() {
 
     sendSysex("F0 47 7F 7B 60 00 04 41 08 02 01 F7"); // Set Mode 1
     APC_usleep(SLOWPOKE_DELAY); // Sorry, scheduleTask is not working here since we have to stay in init()
-
-    for (var tr = 0; tr < 8; tr++) // Clear some LED just in case
-    {
-        sendMidi(0x80 | tr, 0x30, 0x00);
-        sendMidi(0x80 | tr, 0x31, 0x00);
-        sendMidi(0x80 | tr, 0x32, 0x00);
-        sendMidi(0x80 | tr, 0x33, 0x00);
-    }
-    sendMidi(0x80, 0x50, 0x00);
+    clearTransportAndTrackLeds();
 
     noteInput = host.getMidiInPort(0).createNoteInput("Akai APC20", "99????", "89????");
 
     applicationView = host.createApplication();
     transportView = host.createTransport();
     masterTrackView = host.createMasterTrack(5);
-    tracksBankView = host.createTrackBank(8, 3, 5);
+    tracksBankView = host.createMainTrackBank(8, 3, 5);
     userControlBankView = host.createUserControls(17);
+    cursorTrack = host.createArrangerCursorTrack(3, 5);
+    cursorDevice = cursorTrack.createCursorDevice();
 
     host.getMidiInPort(0).setMidiCallback(onMidi);
     host.getMidiInPort(0).setSysexCallback(onSysex);
@@ -146,14 +166,14 @@ function init() {
 
         userControlBankView.getControl(t).setIndication(true);
         userControlBankView.getControl(t + 8).setIndication(true);
-        for (var m = 0; m < 8; m++) track.createCursorDevice("Primary").getCommonParameter(m).setIndication(true);
+        for (var m = 0; m < 8; m++) cursorDevice.getCommonParameter(m).setIndication(true);
         track.getVolume().setIndication(true);
         track.getPan().setIndication(true);
         track.getSend(0).setIndication(true);
         track.getSend(1).setIndication(true);
         track.getSend(2).setIndication(true);
 
-        var clipLauncher = track.getClipLauncher();
+        clipLauncher = track.getClipLauncher();
         clipLauncher.addHasContentObserver(getClipObserverFunc(t, 1));
         clipLauncher.addIsPlayingObserver(getClipObserverFunc(t, 2));
         clipLauncher.addIsRecordingObserver(getClipObserverFunc(t, 3));
@@ -180,7 +200,7 @@ function exit() {
         tracksBankView.getChannel(t).getClipLauncher().setIndication(false);
         userControlBankView.getControl(t).setIndication(false);
         userControlBankView.getControl(t + 8).setIndication(false);
-        for (var m = 0; m < 8; m++) tracksBankView.getChannel(t).getPrimaryDevice().getMacro(m).getAmount().setIndication(false);
+        for (var m = 0; m < 8; m++) cursorDevice.getCommonParameter(m).setIndication(false);
         tracksBankView.getChannel(t).getVolume().setIndication(false);
         tracksBankView.getChannel(t).getPan().setIndication(false);
         tracksBankView.getChannel(t).getSend(0).setIndication(false);
@@ -201,9 +221,31 @@ function exit() {
         for (var tr = 0; tr < 8; tr++)
             sendMidi(0x80 | tr, 0x35 + scn, 0x00);
 
+    noteMode = false;
+    overdubMode = false;
+    isPlaying = false;
+    isRecording = false;
+    shiftPressed = false;
+    canScrollLeft = canScrollRight = canScrollUp = canScrollDown = false;
+    fadersMode = 0;
+    selectedTrackIndex = 0;
+    clipSize = 4;
+    notifications = true;
+    clipHasContent = initArray(false, 40);
+    clipIsPlaiyng = initArray(false, 40);
+    clipIsRecording = initArray(false, 40);
+    clipIsQueued = initArray(false, 40);
+    trackIsMuted = initArray(false, 8);
+    trackIsSoloed = initArray(false, 8);
+    trackIsArmed = initArray(false, 8);
+    trackExists = initArray(false, 8)
+    trackIsGroup = initArray(false, 8);
+    trackIsMuted = initArray(false, 8);
+    trackIsSoloed = initArray(false, 8);
+    trackIsArmed = initArray(false, 8);
+    trackExists = initArray(false, 8);
 
     sendSysex("F0 47 7F 7B 60 00 04 40 08 02 01 F7"); // Set Mode 0
-    APC_usleep(SLOWPOKE_DELAY); // Trust me, I'm engineer
 }
 
 function onMidi(status, data1, data2) {
@@ -275,13 +317,13 @@ function onMidi(status, data1, data2) {
 
         if ((status === 0x94) && (data1 === 0x33)) //Left pressed
         {
-            tracksBankView.scrollTracksUp();
+            tracksBankView.scrollChannelsUp();
             return;
         }
 
         if ((status === 0x95) && (data1 === 0x33)) //Right pressed
         {
-            tracksBankView.scrollTracksDown();
+            tracksBankView.scrollChannelsDown();
             return;
         }
 
@@ -301,7 +343,7 @@ function onMidi(status, data1, data2) {
         { // Switching to note mode now
             for (var scn = 0; scn < 5; scn++)
                 for (var tr = 0; tr < 8; tr++)
-                    sendMidi(0x80 | tr, 0x35 + scn, 0x00); // clead clip LEDs for note mode
+                    sendMidi(0x80 | tr, 0x35 + scn, 0x00); // clear clip LEDs for note mode
 
             sendSysex("F0 47 7F 7B 60 00 04 43 08 02 01 F7"); // Set NoteMode
             noteMode = true;
@@ -433,12 +475,12 @@ function onMidi(status, data1, data2) {
             switch (data1 - 0x52) {
                 case 0:
                     {
-                        tracksBankView.scrollTracksPageUp();
+                        tracksBankView.scrollChannelsPageUp();
                         return;
                     }
                 case 1:
                     {
-                        tracksBankView.scrollTracksPageDown();
+                        tracksBankView.scrollChannelsPageDown();
                         return;
                     }
                 case 2:
@@ -527,6 +569,23 @@ function onMidi(status, data1, data2) {
         if (data1 === 0x2F) // CUE relative data
         {
             userControlBankView.getControl(16).inc((data2 < 0x40) ? data2 : (data2 - 0x80), 128);
+            // make it configurable
+            // cue is mappable or
+            // is used to navigate select devices
+            // if (data2 < 0x40) {
+            //     cursUp += data2;
+            // }
+            // if (data2 > 0x40) {
+            //     cursDown += data2 - 0x80;
+            // }
+            // if (cursUp > 15) {
+            //     cursUp = 0;
+            //     cursorDevice.selectNext();
+            // }
+            // if (cursDown < -15) {
+            //     cursDown = 0;
+            //     cursorDevice.selectPrevious();
+            // }
             return;
         }
 
@@ -626,7 +685,7 @@ function onMidi(status, data1, data2) {
                 {
                     if (data1 === 0x07) // vol fader
                     {
-                        tracksBankView.getChannel(selectedTrackIndex).createCursorDevice("Primary").getCommonParameter((status & 0x07)).set(data2, 128);
+                        cursorDevice.getCommonParameter((status & 0x07)).set(data2, 128);
                         return;
                     }
                     if (data1 === 0x0E) // master fader
@@ -640,7 +699,7 @@ function onMidi(status, data1, data2) {
         }
     }
 
-    //	printMidi( status, data1, data2 ); //some unhandeled messages
+    //	printMidi( status, data1, data2 ); //some unhandled messages
 }
 
 function onSysex(data) {
@@ -665,10 +724,6 @@ function launcherOverdubOb(state) {
     if (overdubMode) sendMidi(0x93, 0x33, 0x7F); // turn LED on
     if (!overdubMode) sendMidi(0x83, 0x33, 0x00); // turn LED off
 }
-var trackIsMuted = initArray(false, 8);
-var trackIsSoloed = initArray(false, 8);
-var trackIsArmed = initArray(false, 8);
-var trackExists = initArray(false, 8);
 
 function getTrackObFunc(track, property) {
     return function(value) {
@@ -709,9 +764,6 @@ function getTrackObFunc(track, property) {
                 {
                     if (value)
                         selectedTrackIndex = track;
-                    for (var m = 0; m < 8; m++) {
-                        tracksBankView.getChannel(selectedTrackIndex).createCursorDevice("Primary").getCommonParameter(m).setIndication(true);
-                    }
                     return;
                 }
             case 7: // Track is group
@@ -846,7 +898,8 @@ function getClipObserverFunc(track, state) {
 }
 
 function masterTrackOb(value) {
-    sendMidi(0xB0, 0x0E, (value <= 127) ? value : 127);
+    // sendMidi(0xB0, 0x0E, (value <= 127) ? value : 127);  //do not update volume
+    return;
 }
 
 function canScrollTracksUpOb(state) {
