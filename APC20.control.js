@@ -143,7 +143,8 @@ function init() {
     tracksBankView = host.createMainTrackBank(8, 3, 5);
     userControlBankView = host.createUserControls(17);
     cursorTrack = host.createArrangerCursorTrack(3, 5);
-    cursorDevice = cursorTrack.createCursorDevice();
+    cursorDevice = cursorTrack.createCursorDevice("Primary");
+    // tracksBankView = cursorTrack.createSiblingsTrackBank(8, 3, 5, true, false);
 
     host.getMidiInPort(0).setMidiCallback(onMidi);
     host.getMidiInPort(0).setSysexCallback(onSysex);
